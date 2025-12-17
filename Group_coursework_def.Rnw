@@ -1,0 +1,805 @@
+\documentclass{article}
+
+% ---- Preamble ----
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{inconsolata}
+\usepackage[sc]{mathpazo}
+\usepackage{amsmath, amssymb}
+\usepackage{url}
+\usepackage[unicode=true, pdfusetitle,
+  bookmarks=true, bookmarksnumbered=true, bookmarksopen=true, 
+  bookmarksopenlevel=2,
+  breaklinks=true, pdfborder={0 0 1}, backref=false, colorlinks=false]{hyperref}
+
+% ---- Title and Author ----
+\title{Measuring Joy Before the Storm:\\ A Regression Analysis of Pre-COVID 
+Happiness}
+\author{
+  Pablo Hernández Fernández \\
+  Luis Albertos Serrano \\
+  Alberto Marín Redondo \\
+  Miguel Rodríguez Losada
+}
+
+\begin{document}
+
+% ---- KnitR setup ----
+<<setup, include=FALSE, cache=FALSE, warning=FALSE>>=
+library(knitr)
+opts_chunk$set(fig.path='figure/minimal-', fig.align='center', fig.show='hold')
+options(formatR.arrow=TRUE, width=90)
+@
+
+% ---- Title and TOC ----
+
+\pagenumbering{gobble} % Desactiva números de página antes de la introducción
+
+\maketitle
+\newpage
+\tableofcontents
+\newpage
+
+\pagenumbering{arabic} % Activa numeración de nuevo
+\setcounter{page}{1}   % Comienza en la página 1
+
+% ---- Section 1: Introduction ----
+\section{Introduction}
+
+In recent years, subjective well-being and happiness have become central topics 
+in social and economic policy discussions. Quantifying happiness allows 
+researchers and policymakers to evaluate the quality of life across countries 
+beyond traditional economic indicators such as GDP per capita.
+
+This analysis aims to identify and quantify the key drivers of national 
+happiness using the 2019 data from the \textit{World Happiness Report}. 
+We apply multiple linear regression techniques to model the happiness score of
+each country as a function of social, economic, and health-related variables.
+
+One of the aspects that attracted us to this dataset is the opportunity to study 
+what influenced national happiness immediately before a historical global event: 
+the COVID-19 pandemic. As 2019 represents the last ``normal'' year before the 
+crisis, this analysis offers a valuable baseline for understanding how countries 
+differed in perceived well-being and which factors contributed most to it.
+
+Our main research question is:
+
+\begin{quote}
+\textit{Can we predict the happiness score of a country in 2019 using 
+measurable national indicators, and which of these indicators are the most 
+influential?}
+\end{quote}
+
+% ---- Section 2: Dataset ----
+\section{Dataset}
+
+The dataset used in this report is obtained from Kaggle, under the World 
+Happiness dataset published by the United Nations Sustainable Development 
+Solutions Network (UN SDSN)
+\footnote{\url{https://www.kaggle.com/datasets/unsdsn/world-happiness?select=2019.csv}}. 
+It contains data for 156 countries and includes several quantitative indicators
+believed to be associated with national happiness.
+
+\vspace{0.1cm}
+
+Below we load the dataset and inspect the variable structure:
+
+<<>>=
+data <- read.csv("2019.csv", header=TRUE, sep=",", stringsAsFactors=TRUE)
+
+for (i in seq_along(data)) {
+  var_name <- names(data)[i]
+  var_type <- class(data[[i]])[1]
+  cat(paste0("- ", var_name, ": ", var_type, "\n"))
+}
+@
+
+
+\textit{Note: Instead of using the \texttt{str()} function, we manually display 
+the names and types of the variables below. This decision was made to avoid 
+compilation errors associated with long or complex R output in the 
+\texttt{Sweave} + \texttt{pdflatex} pipeline.}
+
+\vspace{0.1cm}
+
+We now provide a detailed explanation of the variables considered in this 
+analysis.
+
+\begin{itemize}
+  \item \textbf{Score}: The average life evaluation score based on the Cantril 
+  ladder question, used as the response variable. According to the report's
+  methodology, this score is approximated by the sum of six major factors,
+  each derived from a regression model, plus a residual component:
+  
+  \begin{align*}
+  \texttt{Score} \approx\ & \texttt{GDP.per.capita} + \texttt{Social.support} 
+  + \texttt{Healthy.life.expectancy} \\
+  & + \texttt{Freedom.to.make.life.choices} + \texttt{Generosity} 
+  + \texttt{Perceptions.of.corruption} + \varepsilon
+  \end{align*}
+  
+    \item \textbf{GDP per capita}: Logarithmic estimate of income per person.
+  
+  \item \textbf{Social support}: Perceived availability of someone to rely 
+  on in times of trouble.
+  
+  \item \textbf{Healthy life expectancy}: Life expectancy at birth, adjusted
+  for health conditions.
+  
+  \item \textbf{Freedom to make life choices}: Measure of perceived freedom in
+  life decisions.
+  
+  \item \textbf{Generosity}: Average donations relative to GDP, based on survey 
+  responses.
+  
+  \item \textbf{Perceptions of corruption}: Trust in public institutions, based 
+  on perceived corruption levels in government and business.
+\end{itemize}
+
+No missing values were found in the dataset. All predictor variables are numeric
+and well-suited for regression analysis.
+
+\section{The Model}
+
+To understand the factors influencing happiness across countries, we aim to:
+
+\begin{itemize}
+    \item Construct a statistical model to explain the variation in national 
+    happiness based on socioeconomic and perception-based indicators.
+    \item Estimate this model using the World Happiness Report 2019 data.
+    \item Identify which predictors have the most substantial impact on the
+    happiness score.
+\end{itemize}
+
+\vspace{0.3cm}
+
+To achieve these objectives, we propose a multiple linear regression model of 
+the form:
+
+\[
+\textcolor{blue}{Y_i} = \beta_0 + \textcolor{purple}{x_{i1}}\beta_1 + \dots + 
+\textcolor{purple}{x_{ik}}\beta_k + \textcolor{red}{\varepsilon_i}, \quad 
+i = 1, \dots, n
+\]
+
+where \( \textcolor{red}{\varepsilon_i} \sim \mathcal{N}(0, \sigma^2) \) are 
+independent random errors, and each \( \textcolor{purple}{x_{ij}} \) denotes 
+the value of the \( j \)-th predictor for the \( i \)-th observation.
+
+\vspace{0.4cm}
+
+In our case, the response variable \( \textcolor{blue}{Y} \) is the happiness 
+score (\texttt{Score}), and the explanatory variables are the following 
+\( k = 6 \) features from the dataset:
+
+\vspace{0.2cm}
+
+\fcolorbox{cyan!50!black}{cyan!10}{
+\begin{minipage}{0.95\textwidth}
+\texttt{GDP.per.capita} \\
+\texttt{Social.support} \\
+\texttt{Healthy.life.expectancy} \\
+\texttt{Freedom.to.make.life.choices} \\
+\texttt{Generosity} \\
+\texttt{Perceptions.of.corruption}
+\end{minipage}
+}
+
+\vspace{0.4cm}
+
+This model allows us to estimate the relative contribution of each of these 
+variables to the reported happiness levels and to identify those with the 
+greatest explanatory power.
+
+\subsection{Exploratory Visualization of the Data}
+
+Before fitting the model, it is essential to visually examine the pairwise 
+relationships between the response and explanatory variables. This helps to 
+validate assumptions of linearity and identify potential multicollinearity.
+
+\vspace{0.2cm}
+
+We use a scatterplot matrix to display the relationships among the response 
+variable (\texttt{Score}) and the six predictors under consideration:
+
+<<echo=FALSE, fig.width=8, fig.height=6.3>>=
+plot(data[, c("Score", 
+              "GDP.per.capita", 
+              "Social.support", 
+              "Healthy.life.expectancy", 
+              "Freedom.to.make.life.choices", 
+              "Generosity", 
+              "Perceptions.of.corruption")])
+@
+
+
+\noindent From the scatterplot matrix, we can draw the following initial insights:
+
+\begin{itemize}
+  \item There is a strong positive linear association between the response 
+  variable \textcolor{teal}{\texttt{Score}} and several predictors, especially
+  \textcolor{orange!80!black}{\texttt{GDP.per.capita}}, 
+  \textcolor{orange!80!black}{\texttt{Social.support}}, and 
+  \textcolor{orange!80!black}{\texttt{Healthy.life.expectancy}}. 
+  This visual pattern supports the use of a linear regression framework.
+  
+  \item Clear collinearity is observed between certain predictors. Notably, 
+  \textcolor{orange!80!black}{\texttt{GDP.per.capita}} and 
+  \textcolor{orange!80!black}{\texttt{Healthy.life.expectancy}} display a 
+  near-linear relationship, as do \textcolor{orange!80!black}
+  {\texttt{Social.support}} and \textcolor{orange!80!black}
+  {\texttt{Freedom.to.make.life.choices}}. This redundancy may compromise the 
+  stability of coefficient estimates and will be addressed through 
+  multicollinearity diagnostics.
+  
+  \item Some predictors, such as \textcolor{gray!70!black}{\texttt{Generosity}} 
+  and \textcolor{gray!70!black}{\texttt{Perceptions.of.corruption}}, 
+  exhibit weaker or less structured relationships with \textcolor{teal}
+  {\texttt{Score}}. Their explanatory power may therefore be limited, though 
+  this will be formally assessed during model fitting.
+  
+  \item No major outliers or non-linear trends are evident at first glance, 
+  suggesting the data meet initial expectations for linear regression. However, 
+  residual analysis will be conducted to validate these assumptions.
+\end{itemize}
+
+\section{Statistical Analysis}
+
+We now proceed to estimate simple and multiple linear regression models in 
+order to statistically explain the variability in the national happiness score
+(\texttt{Score}) using six explanatory variables derived from the dataset. 
+
+\vspace{0.1cm}
+
+As a preliminary step, we explore the empirical associations between the 
+response and each covariate through pairwise scatterplots, which serve to 
+assess potential linear relationships and justify the use of a linear modeling 
+framework.
+
+<<echo=FALSE, fig.width=12, fig.height=6.75>>=
+par(mfrow = c(2, 2), mar = c(4,4,3,1))
+
+# 1. GDP per capita
+plot(data$GDP.per.capita, data$Score,
+     col = "steelblue", pch = 19,
+     main = "Happiness vs GDP per Capita",
+     xlab = "GDP per Capita",
+     ylab = "Happiness Score")
+abline(lm(Score ~ GDP.per.capita, data = data), col = "darkblue", lwd = 2)
+
+# 2. Social support
+plot(data$Social.support, data$Score,
+     col = "forestgreen", pch = 19,
+     main = "Happiness vs Social Support",
+     xlab = "Social Support",
+     ylab = "Happiness Score")
+abline(lm(Score ~ Social.support, data = data), col = "darkgreen", lwd = 2)
+
+# 3. Healthy life expectancy
+plot(data$Healthy.life.expectancy, data$Score,
+     col = "darkorange", pch = 19,
+     main = "Happiness vs Healthy Life Expectancy",
+     xlab = "Healthy Life Expectancy",
+     ylab = "Happiness Score")
+abline(lm(Score ~ Healthy.life.expectancy, data = data), 
+       col = "orangered", lwd = 2)
+
+# 4. Freedom of choice
+plot(data$Freedom.to.make.life.choices, data$Score,
+     col = "mediumvioletred", pch = 19,
+     main = "Happiness vs Freedom of Choice",
+     xlab = "Freedom to Make Life Choices",
+     ylab = "Happiness Score")
+abline(lm(Score ~ Freedom.to.make.life.choices, data = data), 
+       col = "purple", lwd = 2)
+@
+
+<<echo=FALSE, fig.width=12, fig.height=3.5>>=
+par(mfrow = c(1, 2), mar = c(4,4,3,1))
+# 5. Generosity
+plot(data$Generosity, data$Score,
+     col = "darkcyan", pch = 19,
+     main = "Happiness vs Generosity",
+     xlab = "Generosity",
+     ylab = "Happiness Score")
+abline(lm(Score ~ Generosity, data = data), col = "cyan", lwd = 2)
+
+# 6. Perceptions of corruption
+plot(data$Perceptions.of.corruption, data$Score,
+     col = "brown", pch = 19,
+     main = "Happiness vs Perceptions of Corruption",
+     xlab = "Perceptions of Corruption",
+     ylab = "Happiness Score")
+abline(lm(Score ~ Perceptions.of.corruption, data = data), 
+       col = "firebrick", lwd = 2)
+@
+
+\vspace{0.3cm}
+
+We begin our statistical analysis by fitting a series of simple linear 
+regression models, each involving the response variable \texttt{Score} and 
+a single explanatory variable. 
+
+\vspace{0.1cm}
+
+This approach allows us to individually assess the marginal effect of each 
+predictor on national happiness without accounting for potential 
+multicollinearity or interactions with other covariates. These models serve as 
+a baseline for understanding the strength and direction of each variable’s 
+relationship with the response before proceeding to a full multivariate 
+analysis.
+
+<<>>=
+lm1 <- lm(Score ~ GDP.per.capita, data = data)
+lm2 <- lm(Score ~ Social.support, data = data)
+lm3 <- lm(Score ~ Healthy.life.expectancy, data = data)
+lm4 <- lm(Score ~ Freedom.to.make.life.choices, data = data)
+lm5 <- lm(Score ~ Generosity, data = data)
+lm6 <- lm(Score ~ Perceptions.of.corruption, data = data)
+@
+
+\vspace{0.1cm}
+
+For each fitted model, we examine the estimated regression coefficients, their 
+associated standard errors, and the corresponding \( p \)-values to assess 
+statistical significance. This is carried out using the \texttt{summary()} 
+function in \texttt{R}, which also reports the \( R^2 \) and adjusted \( R^2 \) 
+values. These metrics allow us to evaluate the proportion of variance in the 
+happiness score explained by each predictor and to identify which covariates 
+exhibit strong linear associations with the response variable when considered in
+isolation.
+
+<<summary-chunk,echo=FALSE, results='hide', message=FALSE, warning=FALSE>>=
+summary(lm1)
+summary(lm2)
+summary(lm3)
+summary(lm4)
+summary(lm5)
+summary(lm6)
+@
+
+\begin{itemize}
+    \item \textbf{GDP per capita}: Shows the highest explanatory power among
+    all variables. The model yields an $R^2$ of 0.6303, and we have no evidence 
+    to reject a linear relation ($p < 2 \times 10^{-16}$). On average, an 
+    increase of one unit in GDP per capita is associated with a 2.2181-point 
+    increase in happiness score.
+
+    \item \textbf{Social support}: Also exhibits a strong positive association
+    with happiness, with an $R^2$ of 0.6038 we have no evidence to reject
+    a linear relation ($p < 2 \times 10^{-16}$). The estimated effect is 
+    approximately 2.8910 units.
+
+    \item \textbf{Healthy life expectancy}: Performs similarly well, with 
+    an $R^2$ of 0.6082. Also there is no evidence to reject
+    a linear relation ($p < 2.2 \times 10^{-16}$). The happiness score increases
+    by 3.5854 units per unit increase in life expectancy.
+
+    \item \textbf{Freedom to make life choices}: Although we have no evidence to
+    reject ($p < 2 \times 10^{-14}$), this variable shows a noticeably lower 
+    explanatory capacity ($R^2 = 0.3212$), indicating a weaker individual
+    influence.
+
+    \item \textbf{Generosity}: Displays negligible explanatory power
+    ($R^2 = 0.0057$) and is not statistically significant ($p = 0.347$), 
+    so we can reject a linear relation between perceived generosity of a country
+    and its hapiness score.
+
+    \item \textbf{Perceptions of corruption}: While can't reject a linear 
+    relation between the variables ($p < 10^{-6}$), its explanatory power is 
+    limited ($R^2 = 0.1487$), indicating that trust in public institutions has a
+    moderate role in explaining national happiness.
+\end{itemize}
+
+Overall, economic and health-related indicators are the most informative 
+individual predictors of national happiness, while subjective measures such 
+as generosity appear to contribute less in isolation.
+
+\vspace{0.1cm}
+
+Having examined the individual effect of each predictor through simple linear 
+regression, we now fit a multiple linear regression model that includes all 
+six explanatory variables simultaneously. 
+
+\vspace{0.1cm}
+
+This comprehensive model allows us to evaluate the joint effect of the 
+covariates on the happiness score (\texttt{Score}), while accounting for 
+potential correlations among them. The estimated coefficients in this setting
+represent the marginal effect of each variable on the response, adjusted for 
+the presence of the others. This model serves as the foundation for subsequent
+diagnostic analysis and potential variable selection procedures.
+
+\vspace{0.1cm}
+
+Specifically, the corresponding code chunk is presented below, detailing the 
+procedure used to carry out this step of the analysis.
+
+<<>>=
+# Multiple regression with all covariates
+lm_full <- lm(Score ~ GDP.per.capita + Social.support + 
+                Healthy.life.expectancy +
+              Freedom.to.make.life.choices + Generosity + 
+                Perceptions.of.corruption,
+              data = data)
+@
+
+
+<<>>=
+summary(lm_full)
+@
+
+We are able to confirm that some variables, such as \texttt{Generosity} and 
+\texttt{Perceptions.of.corruption}, may not be significant in the full model. 
+To refine our model and potentially improve its interpretability and predictive 
+performance, we apply a stepwise variable selection procedure. This technique 
+iteratively adds or removes covariates based on the Akaike Information 
+Criterion (AIC), aiming to retain only those predictors that provide substantial
+explanatory power.
+
+<<>>=
+lm_step <- step(lm_full, direction = "both")
+@
+
+\vspace{0.1cm}
+
+The algorithm starts by removing \texttt{Generosity} (the least significant for 
+the model). Once done, it tries again, but all the remaining covariates are 
+significant enough, so the only one removed is \texttt{Generosity}.
+
+Below we present the summary of the final model selected through this process:
+
+<<>>=
+summary(lm_step)
+@
+
+\subsection{Regression Diagnostics}
+
+Regression diagnostics allow us to check whether the assumptions listed in 
+Section 3 hold in our fitted model. These include linearity, independence,
+homoscedasticity (constant variance), and normality of residuals, as well as 
+detecting potential outliers or influential points.
+
+\subsubsection{Constant Variance and Independence of Residuals}
+
+We first examine the assumption of homoscedasticity (constant variance of the 
+residuals) by plotting the standardized residuals against the fitted values. A 
+random spread of points around zero suggests that the variance is constant 
+across levels of the fitted values.
+
+\vspace{0.1cm}
+
+To check for independence of residuals, we plot them against the observation 
+index. We also apply the Durbin-Watson test to statistically assess 
+autocorrelation, with the null hypothesis being that residuals are uncorrelated.
+
+
+<<echo=FALSE, fig.width=6.5, fig.height=2.75, message=FALSE>>=
+par(mfrow = c(1, 2))
+
+resid_std <- rstandard(lm_full)
+
+# Plot 1: Residuals vs Fitted
+plot(fitted(lm_full), resid_std,
+     xlab = "Fitted values", 
+     ylab = "Standardized residuals",
+     main = "Residuals vs Fitted",
+     pch = 16, col = "darkred", cex = 0.65)
+abline(h = 0, col = "gray40", lty = 2, lwd = 1.3)
+
+# Plot 2: Residuals vs Observation Index
+plot(data$Overall.rank, resid_std,
+     xlab = "Observation Index", 
+     ylab = "Standardized residuals",
+     main = "Residuals vs Obs. Index",
+     pch = 16, col = "darkblue", cex = 0.65)
+abline(h = 0, col = "gray40", lty = 2, lwd = 1.3)
+@
+
+We apply the Durbin-Watson test for autocorrelation:
+
+<<message=FALSE>>=
+library(lmtest)
+dwtest(lm_full)
+@
+
+We can draw the following conclusions:
+
+\begin{itemize}
+  \item The \textbf{Residuals vs Fitted Values} plot shows no clear funnel 
+  shape or systematic pattern, suggesting that the assumption of 
+  \textit{homoscedasticity} (constant variance) is reasonably satisfied. The 
+  residuals appear to be randomly scattered around zero across all fitted values.
+
+  \item The \textbf{Residuals vs Observation Index} plot reveals a slight 
+  trend and possible clustering, which may indicate minor dependence between
+  residuals. This visual impression motivates formal testing.
+
+  \item The \textbf{Durbin-Watson test} returns a test statistic of 
+  approximately 1.6484 with a p-value of 0.011.
+  \end{itemize}
+
+\vspace{0.3cm}
+\fcolorbox{gray!60!black}{gray!10}{
+  \begin{minipage}{0.96\textwidth}
+    \textit{Note: Although the Durbin-Watson test indicates some positive autocorrelation 
+    in residuals (DW = 1.6484, p = 0.011), we note that the dataset is 
+    cross-sectional in nature, and countries are likely ordered by overall rank 
+    rather than time or space. As such, residual dependence may result from 
+    unmeasured regional similarities. Given that other assumptions 
+    (homoscedasticity, linearity, normality) are met and the residuals are 
+    relatively stable, we proceed with the model, while acknowledging this 
+    limitation and suggesting that future studies incorporate spatial or multilevel
+    modeling techniques.}
+  \end{minipage}
+}
+\vspace{0.3cm}
+
+
+\subsubsection{Normality of Residuals}
+
+To assess whether residuals follow a normal distribution, we use a Q-Q plot and 
+apply the Kolmogorov-Smirnov test. A linear pattern in the Q-Q plot and a large
+\( p \)-value from the test support the assumption of normality.
+<<echo=TRUE, fig.width=5, fig.height=3>>=
+qqnorm(resid(lm_full))
+qqline(resid(lm_full), col = "blue", lwd = 2)
+@
+
+We test normality using the Kolmogorov-Smirnov test:
+
+<<>>=
+ks.test(resid(lm_full), "pnorm", mean = mean(resid(lm_full)), 
+        sd = sd(resid(lm_full)))
+@
+
+The Q-Q plot displays a largely linear pattern, with only minor deviations in 
+the tails, indicating that the residuals follow an approximately normal 
+distribution. This impression is confirmed by the Kolmogorov-Smirnov test, 
+which returns a test statistic \( D = 0.0582 \) and a p-value of 0.6658. Since 
+this p-value far exceeds the conventional 5\% significance level, we find no 
+statistical evidence to reject the null hypothesis of normality. Both the 
+visual and formal diagnostics thus suggest that the normality assumption is +
+adequately met for the residuals of the fitted model.
+
+\subsubsection{Linearity Check with Component+Residual Plots}
+
+To assess the linearity assumption, we use component-plus-residual 
+(partial residual) plots. These plots help visualize whether the relationship 
+between the response and each covariate is approximately linear, controlling 
+for the effect of other variables.
+
+<<echo=TRUE, fig.width=8, fig.height=7, message=FALSE>>=
+library(car)
+crPlots(lm_full)
+@
+
+\vspace{0.3cm}
+\noindent Based on the component-plus-residual plots, the linearity assumption 
+appears reasonably satisfied for all predictors. The relationships are 
+approximately linear, especially for \texttt{GDP.per.capita}, 
+\texttt{Social.support}, and \texttt{Freedom.to.make.life.choices}. Although 
+some slight nonlinearity is visible in \texttt{Generosity} and 
+\texttt{Healthy.life.expectancy}, the deviations are not severe enough to 
+undermine the validity of a linear regression approach.
+
+\subsubsection{Outliers and Influential Observations}
+
+We identify potential outliers using standardized residuals greater than 
+\(\pm 2.5\). In addition, we use Cook’s distance and leverage measures 
+(via the influence index plot) to detect influential or high-leverage
+observations.
+
+<<>>=
+outliers <- which(abs(resid_std) > 2.5)
+outliers
+@
+
+We now visualize the influence measures for all observations:
+
+<<echo=TRUE, fig.width=8.5, fig.height=7>>=
+influenceIndexPlot(lm_full)
+@
+
+\newpage
+\subsubsection{Refining the Model: Removing Unusual Observations}
+
+Outliers and influential observations can distort the accuracy and stability of 
+regression estimates. These atypical data points might stem from measurement 
+inconsistencies, data entry errors, or genuine but exceptional cases that 
+deviate from general trends. Proper identification and handling of these points 
+is essential for obtaining robust and interpretable models.
+
+\vspace{0.2cm}
+
+In this section, we applied an iterative outlier removal strategy using
+standardized residuals obtained from the \texttt{rstandard()} function in \
+texttt{R}. The model used at each iteration was a multiple linear regression 
+fitted via \texttt{lm()}, with the following six predictors:
+
+\vspace{0.2cm}
+
+\fcolorbox{cyan!50!black}{cyan!10}{
+  \parbox{\textwidth}{
+    \centering
+    \texttt{GDP.per.capita} \quad
+    \texttt{Social.support} \quad
+    \texttt{Healthy.life.expectancy} \\
+    \texttt{Freedom.to.make.life.choices} \quad
+    \texttt{Generosity} \quad
+    \texttt{Perceptions.of.corruption}
+  }
+}
+
+\vspace{0.2cm}
+
+For each fitted model, we computed standardized residuals with 
+\texttt{rstandard()} and identified outliers as those with absolute values 
+greater than 2.5. We removed the most extreme observation and refitted the
+model using \texttt{lm()} on the reduced dataset. We repeated this procedure 
+until all standardized residuals were within the acceptable range.
+
+\vspace{0.2cm}
+
+Each iteration was evaluated using \texttt{summary()}, tracking the adjusted 
+\( R^2 \), residual standard error, and statistical significance of covariates. 
+A particular focus was placed on the variable \texttt{Generosity}, whose 
+coefficient repeatedly failed to reach significance.
+
+\vspace{0.3cm}
+
+\begin{table}[htbp]
+  \centering
+  \renewcommand{\arraystretch}{1.2}
+  \begin{tabular}{@{}c c c@{}}
+  \hline
+  \textbf{Removed Observation} & \textbf{Adjusted \( R^2 \)} & 
+  \textbf{\texttt{Generosity} Significance} \\
+  \hline
+  152 & 0.7796 & Not Significant \\
+  148 & 0.7938 & Not Significant \\
+  130 & 0.8023 & Not Significant \\
+  76  & 0.8113 & Not Significant \\
+  34  & 0.8199 & Not Significant \\
+  128 & 0.8268 & Not Significant \\
+  147 & 0.8352 & Model Stabilized \\
+  \hline
+  \end{tabular}
+  \caption{Summary of the Iterative Model Refinement Process}
+\end{table}
+
+\vspace{0.2cm}
+
+The final model, fitted after excluding observations 152, 148, 130, 76, 34, 128,
+and 147, achieved the following:
+
+\begin{itemize}
+  \item \( R^2_{adj} = 0.8352 \): about 83.5\% of the variability in 
+  \texttt{Score} is explained.
+  \item Residual standard error = 0.4427.
+  \item F-statistic = 126 (df = 6, 142), \( p < 2.2 \times 10^{-16} \).
+\end{itemize}
+
+Notably, \texttt{Generosity} was not statistically significant in any iteration,
+suggesting limited explanatory value for this response.
+
+\vspace{0.3cm}
+
+The influence diagnostics of the final model were visually inspected using the 
+\texttt{influenceIndexPlot()} function from the \texttt{car} package:
+
+\begin{center}
+<<echo=FALSE, fig.width=8.5, fig.height=7>>=
+data_def <- data[-c(152,148,130,76,34,128,147),]
+All_covariates_def <- lm(Score ~ GDP.per.capita + Social.support +
+                           Healthy.life.expectancy + 
+                           Freedom.to.make.life.choices +
+                           Generosity + Perceptions.of.corruption, 
+                         data = data_def)
+influenceIndexPlot(All_covariates_def)
+@  
+\end{center}
+
+This plot confirms that no new high-leverage or extreme residual values remain. 
+The model can therefore be considered a stable and trustworthy basis for 
+inference in the study of national happiness determinants.
+
+\section{Conclusions}
+
+\noindent This report has explored the key national factors associated with 
+happiness levels in the 2019 \textit{World Happiness Report}, applying multiple
+linear regression to model the variable \texttt{Score} across 156 countries.
+
+\vspace{0.2cm}
+\fcolorbox{green!50!black}{green!10}{
+  \parbox{\textwidth}{
+  The primary objective was to uncover which socio-economic and perception-based
+  indicators best explain national well-being. This was achieved through a 
+  sequence of exploratory analysis, regression modeling, assumption 
+  verification, and outlier refinement.
+  }
+}
+
+\newpage
+\noindent\textit{Main empirical findings:}
+\begin{itemize}
+  \item The strongest positive associations in the initial regressions were 
+  found for \texttt{GDP.per.capita}, \texttt{Social.support}, and 
+  \texttt{Healthy.life.expectancy}.
+  
+  \item In the full model built using the \texttt{lm()} function in \texttt{R},
+  all variables remained significant except \texttt{Generosity}, which did not 
+  provide sufficient explanatory power.
+
+  \item Regression diagnostics confirmed that linearity, constant variance, and 
+  normality of residuals held reasonably well. Slight autocorrelation was +
+  detected through the Durbin-Watson test, though considered manageable given 
+  the cross-sectional nature of the data.
+\end{itemize}
+
+\vspace{0.2cm}
+\noindent\textit{Model refinement and robustness:}
+\begin{itemize}
+  \item Outliers were identified and removed based on standardized residuals 
+  and influence metrics. This step, implemented via \texttt{rstandard()} and 
+  \texttt{influenceIndexPlot()}, enhanced the model’s stability.
+  
+  \item The final refined model achieved improved metrics:
+  \begin{itemize}
+    \item Adjusted \( R^2 = 0.8352 \)
+    \item Residual standard error = 0.4427
+  \end{itemize}
+  
+  \item Notably, \texttt{Generosity} remained statistically non-significant 
+  throughout all iterations.
+\end{itemize}
+
+\vspace{0.2cm}
+\fcolorbox{green!50!black}{green!10}{
+  \parbox{\textwidth}{
+  \textit{Key insight:} Among all variables considered, national income, health
+  outcomes, and social support stood out as the most reliable predictors of 
+  happiness in 2019, demonstrating consistent and strong effects across all 
+  phases of analysis.
+  }
+}
+
+\vspace{0.4cm}
+\noindent\textit{Considerations for future work:}
+\begin{itemize}
+  \item Linear models are easy to interpret but may miss nonlinearities or 
+  complex interactions in social data.
+
+  \item Regularized methods (e.g., Ridge, LASSO), as well as nonlinear or 
+  longitudinal models, could reveal deeper patterns.
+
+  \item To address the mild autocorrelation detected in Section 4.1.1, future
+  work could consider \textbf{cluster-based models} to account for potential
+  regional or cultural groupings among countries.
+\end{itemize}
+
+\vspace{0.2cm}
+\fcolorbox{green!50!black}{green!10}{
+  \parbox{\textwidth}{
+  The results emphasize that fostering economic prosperity, public health, and 
+  social connectedness may offer the most effective pathways for improving 
+  happiness at the national level.
+  }
+}
+
+\section{References}
+  \begin{itemize}
+      \item Crawley, M. J. (2007). \textit{The R Book}. Wiley. Available at: 
+      \href{https://www.cs.upc.edu/~robert/teaching/estadistica/TheRBook.pdf}
+      {The R Book PDF}
+      \item Wickham, H. (2023). \textit{R Packages}. Available at: 
+      \href{https://r-pkgs.org/index.html}{r-pkgs.org}
+  \end{itemize}
+
+\end{document}
