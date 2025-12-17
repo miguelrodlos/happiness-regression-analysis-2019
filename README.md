@@ -74,7 +74,7 @@ The analysis is written in a **Sweave (`.Rnw`) file**, which:
 ---
 
 ## Repository Structure
-├── Group_coursework_def.Rnw      # Main Sweave analysis
-├── Group_coursework_def.pdf      # Compiled report
-├── 2019.csv                      # Dataset
+├── Group_coursework_def.Rnw      
+├── Group_coursework_def.pdf     
+├── 2019.csv                    
 └── README.md
